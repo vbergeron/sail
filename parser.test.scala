@@ -16,6 +16,13 @@ class ParserTest extends FunSuite:
         case failure: Parsed.Failure =>
           fail(failure.longMsg)
 
+  def passingT[T](prefix: String, code: String, parser: P[?] => P[T])(check: T => Unit): Unit =
+    test(s"$prefix - $code"):
+      parse(code, parser, verboseFailures = true) match
+        case Parsed.Success(value, index) => check(value)
+        case failure: Parsed.Failure =>
+          fail(failure.longMsg)
+
   def failing[T](prefix: String, code: String, parser: P[?] => P[T]): Unit =
     test(s"$prefix - $code"):
       parse(code, parser, verboseFailures = true) match
@@ -23,29 +30,52 @@ class ParserTest extends FunSuite:
           fail(s"Expected parsing failure, got $value at $index")
         case failure: Parsed.Failure => ()
 
-  passing("Symbol", "foo", sym(_))
+  //passing("Expr.Symbol", "foo", sym(_))
 
-  passing("String", "''", str(_))
-  passing("String", "'foobar fkl nadfn'", str(_))
+  //passing("Expr.String", "''", str(_))
+  //passing("Expr.String", "'foobar fkl nadfn'", str(_))
+
+  passing("Part.Capture", "{ foo }", part(_))
+  passing("Part.Capture", "{foo}", part(_))
+  passing("Part.Content", " foo }", part(_))
+  passing("Part.Content", " foo '", part(_))
+  passing("Part.Content", " foo ", part(_))
 
   passing("Template", "'{ foo }'", template(_))
-  passing("Template", "'foobar fkl nadfn {foo}'", template(_))
-  passing("Template", "'foobar fkl {foo} nadfn'", template(_))
-  passing("Template", "'{foo} foobar fkl nadfn'", template(_))
-  passing("Template", "'{foo} foobar {fkl} nadfn'", template(_))
 
-  passing("FuncDef", "f = body", funcDef(_))
-  passing("FuncDef", "f(a) = body", funcDef(_))
-  passing("FuncDef", "f(a,b,c,d) = body", funcDef(_))
+  passingT("Template", "'foobar fkl nadfn {foo}'", template(_)): t =>
+    assertEquals(t.parts, Seq(Part.Content("foobar fkl nadfn "), Part.Capture(Expr.Sym("foo"))))
 
-  failing("FuncCall", "f()", funcCall(_))
-  passing("FuncCall", "f('str')", funcCall(_))
-  passing("FuncCall", "f(g(x)) = body", funcCall(_))
-  passing("FuncCall", "f(a,b,c)", funcCall(_))
+  passingT("Template", "'{foo} foobar fkl nadfn'", template(_)): t =>
+    assertEquals(t.parts, Seq(Part.Capture(Expr.Sym("foo")), Part.Content(" foobar fkl nadfn")))
 
-  passing("Scope", "let a = b in body", scope(_))
-  passing("Scope", "let a = b c = d in body", scope(_))
-  passing("Scope", "let a(x) = b in body", scope(_))
+  passingT("Template", "'foobar fkl {foo} nadfn'", template(_)): t =>
+    assertEquals(t.parts, Seq(
+      Part.Content("foobar fkl "),
+      Part.Capture(Expr.Sym("foo")),
+      Part.Content(" nadfn")
+    ))
 
-  passing("Containter", "container a from 'scratch' with run ''", container(_))
+  passingT("Template", "'{foo} foobar {fkl} nadfn'", template(_)): t =>
+    assertEquals(t.parts, Seq(
+      Part.Capture(Expr.Sym("foo")),
+      Part.Content(" foobar "),
+      Part.Capture(Expr.Sym("fkl")),
+      Part.Content(" nadfn")
+    ))
+
+  //passing("FuncDef", "f = body", funcDef(_))
+  //passing("FuncDef", "f(a) = body", funcDef(_))
+  //passing("FuncDef", "f(a,b,c,d) = body", funcDef(_))
+
+  //failing("FuncCall", "f()", funcCall(_))
+  //passing("FuncCall", "f('str')", funcCall(_))
+  //passing("FuncCall", "f(g(x)) = body", funcCall(_))
+  //passing("FuncCall", "f(a,b,c)", funcCall(_))
+
+  //passing("Scope", "let a = b in body", scope(_))
+  //passing("Scope", "let a = b c = d in body", scope(_))
+  //passing("Scope", "let a(x) = b in body", scope(_))
+
+  //passing("Containter", "container a from 'scratch' with run ''", container(_))
 

@@ -12,30 +12,24 @@ def symbol[$: P] = P(CharPred(_.isLetter).rep.!).filter(_.nonEmpty)
 
 def ws[$: P] = P(CharsWhile(_.isWhitespace).rep)
 
-final case class Part(
-    capture: Option[Expr],
-    content: String,
-    next: Option[Part]
-):
-  def capturing: Boolean =
-    capture.nonEmpty || next.exists(_.capturing)
+enum Part:
+  case Capture(expr: Expr)
+  case Content(text: String)
 
 def part[$: P]: P[Part] =
-  def capture[$: P]: P[Expr] = P("{" ~ ws ~ expr ~ ws ~ "}")
+  def capture[$: P]: P[Part.Capture] =
+    P("{" ~ ws ~ expr ~ ws ~ "}").map(Part.Capture.apply)
 
-  def content[$: P] = P(CharPred(c => c != '\'' && c != '{').rep.!)
+  def content[$: P]: P[Part.Content] =
+    P(CharsWhile(c => c != '\'' && c != '{').!).map(Part.Content.apply)
 
-  ((capture.? ~ content).filter((cap, ctn) =>
-    cap.nonEmpty || ctn.nonEmpty
-  ) ~ part.?)
-    .map(Part.apply)
-    .filter(p => p.capturing)
+  capture | content
 
 sealed trait Expr
 
 object Expr:
   case object Unit                                          extends Expr
-  case class Template(part: Part)                           extends Expr
+  case class Template(parts: Seq[Part])                     extends Expr
   case class Str(content: String)                           extends Expr
   case class Sym(content: String)                           extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
@@ -78,7 +72,9 @@ def str[$: P]: P[Expr.Str] =
 def sym[$: P]: P[Expr.Sym] = symbol.map(Expr.Sym.apply)
 
 def template[$: P]: P[Expr.Template] =
-  P("'" ~ part ~ "'").map(Expr.Template.apply)
+  P("'" ~ part ~ part.rep ~ "'")
+    .map((head, tail) => Expr.Template(head +: tail))
+    .filter(_.parts.exists(_.isInstanceOf[Part.Capture]))
 
 def funcDef[$: P]: P[Expr.FuncDef] =
   def funcDefN[$: P]: P[Expr.FuncDef] =
@@ -111,9 +107,9 @@ def file[$: P]: P[Seq[Expr]] =
 
 type Env = Map[Expr.Sym, Expr]
 
-def renderPart(part: Part): String =
-  val capture = part.capture.map(render).getOrElse("")
-  capture + part.content + part.next.map(renderPart).getOrElse("")
+def renderPart(part: Part): String = part match
+  case Part.Capture(expr) => render(expr)
+  case Part.Content(text) => text
 
 def render(expr: Expr): String =
   expr match
@@ -121,7 +117,7 @@ def render(expr: Expr): String =
     case Expr.Unit                         => "<>"
     case Expr.Scope(bindings, body)        =>
       s"<scope ${bindings.map(render).mkString("[", ",", "]")} ${render(body)}"
-    case Expr.Template(part)               => renderPart(part)
+    case Expr.Template(parts)              => parts.map(renderPart).mkString
     case Expr.Str(content)                 => content
     case Expr.Sym(content)                 =>
       s"<symbol $content>"
@@ -139,18 +135,16 @@ def reduceInstr(env: Env, instr: Instr): Instr =
     case Instr.Block(values) => Instr.Block(values.map(reduceInstr(env, _)))
     case Instr.Defer(value)  => Instr.Defer(reduceInstr(env, value))
 
-def reducePart(env: Env, part: Part): Part =
-  val capture = part.capture.map(reduce(env, _)._2)
-  Part(capture, part.content, part.next.map(reducePart(env, _)))
-
-def simplifyPart(part: Part): Part =
-  part.capture match
-    case Some(Expr.Str(text)) =>
-      Part(None, text ++ part.content, part.next.map(simplifyPart))
-    case _                    => Part(part.capture, part.content, part.next.map(simplifyPart))
+def reducePart(env: Env, part: Part): Part = part match
+  case p: Part.Capture =>
+    reduce(env, p.expr)._2 match
+      case Expr.Str(content) => Part.Content(content)
+      case expr              => Part.Capture(expr)
+  case p: Part.Content => p
 
 def reduceTemplate(env: Env, template: Expr.Template): Expr.Template =
-  Expr.Template(simplifyPart(reducePart(env, template.part)))
+  println(template.parts)
+  Expr.Template(template.parts.map(reducePart(env, _)))
 
 def reduce(env: Env, expr: Expr): (Env, Expr) =
   expr match
