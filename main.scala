@@ -1,6 +1,7 @@
+//> using scala 3.3.1
 //> using dep "com.lihaoyi::fastparse:3.0.2"
+package sail
 
-import Expr.{FuncDef, Template}
 import fastparse.*
 import NoWhitespace.*
 
@@ -39,7 +40,7 @@ object Expr:
   case class Sym(content: String)                           extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
   case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
-  case class Container(name: Sym, build: Instr)             extends Expr
+  case class Container(name: Sym, from: Str, build: Instr)  extends Expr
   case class Scope(bindings: Seq[FuncDef], body: Expr)      extends Expr
 
 sealed trait Instr extends Expr
@@ -100,7 +101,9 @@ def funcCall[$: P]: P[Expr.FuncCall] =
       Expr.FuncCall(name, head +: tail)
 
 def container[$: P]: P[Expr.Container] =
-  P("container" ~ ws ~ sym ~ ws ~ "with" ~ ws ~ instr)
+  P(
+    "container" ~ ws ~ sym ~ ws ~ "from" ~ ws ~ str ~ ws ~ "with" ~ ws ~ instr
+  )
     .map(Expr.Container.apply)
 
 def file[$: P]: P[Seq[Expr]] =
@@ -114,20 +117,20 @@ def renderPart(part: Part): String =
 
 def render(expr: Expr): String =
   expr match
-    case instr: Instr                   => s"<instr $instr>"
-    case Expr.Unit                      => "<>"
-    case Expr.Scope(bindings, body)     =>
+    case instr: Instr                      => s"<instr $instr>"
+    case Expr.Unit                         => "<>"
+    case Expr.Scope(bindings, body)        =>
       s"<scope ${bindings.map(render).mkString("[", ",", "]")} ${render(body)}"
-    case Expr.Template(part)            => renderPart(part)
-    case Expr.Str(content)              => content
-    case Expr.Sym(content)              =>
+    case Expr.Template(part)               => renderPart(part)
+    case Expr.Str(content)                 => content
+    case Expr.Sym(content)                 =>
       s"<symbol $content>"
-    case Expr.FuncDef(name, args, body) =>
+    case Expr.FuncDef(name, args, body)    =>
       s"<func ${name.content}(${args.map(_.content).mkString(",")}) ${render(body)}>"
-    case Expr.FuncCall(name, args)      =>
+    case Expr.FuncCall(name, args)         =>
       s"<call $name(${args.map(render).mkString(",")})>"
-    case Expr.Container(name, build)    =>
-      s"<container ${name.content} - $build>"
+    case Expr.Container(name, from, build) =>
+      s"<container ${name.content} from $from - $build>"
 
 def reduceInstr(env: Env, instr: Instr): Instr =
   instr match
@@ -155,7 +158,7 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
     case it: Expr.Template => (env, reduceTemplate(env, it))
     case it: Expr.Str      => env -> it
     case it: Expr.Sym      =>
-      env.get(it).fold(env -> it)(v => env -> v)
+      env.get(it).fold(env -> it)(v => env -> reduce(env, v)._2)
     case it: Expr.FuncDef  =>
       val reduced = it.copy(body = reduce(env, it.body)._2)
       reduced match
@@ -173,8 +176,8 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
 
       reduce(env ++ locals, func.body)
 
-    case Expr.Container(name, build) =>
-      val reduced = Expr.Container(name, reduceInstr(env, build))
+    case Expr.Container(name, from, build) =>
+      val reduced = Expr.Container(name, from, reduceInstr(env, build))
       (env + (name -> reduced), Expr.Unit)
 
     case Expr.Scope(bindings, body) =>
@@ -189,6 +192,8 @@ def reduceFile(exprs: Seq[Expr]): Env =
 def resolveContainer(container: Expr.Container): Unit =
   val instructions = ListBuffer.empty[String]
   val deferred     = ListBuffer.empty[String]
+
+  println(s"FROM ${render(container.from)}")
 
   def go(add: String => Unit, instr: Instr): Unit =
     instr match
@@ -221,7 +226,7 @@ def run: Unit =
       |    defer run 'rm { from }'
       |  ]
       |
-      |container baz with [
+      |container baz from 'debian:latest' with [
       |  foo('a', 'b')
       |  foo('c', 'd')
       |]
@@ -237,27 +242,3 @@ def run: Unit =
     println(s"${render(key)} = ${render(value)}")
 
   resolveTargets(reduced)
-
-  // println(parse("foo", expr(_)))
-  // println(parse("''", expr(_)))
-
-  // println(parse("'foobar fkl nadfn'", expr(_)))
-  // println(parse("'{ foo }'", expr(_)))
-  // println(parse("'foobar fkl nadfn {foo}'", expr(_)))
-  // println(parse("'foobar fkl {foo} nadfn'", expr(_)))
-  // println(parse("'{foo} foobar fkl nadfn'", expr(_)))
-  // println(parse("'{foo} foobar {fkl} nadfn'", expr(_)))
-
-  // println(parse("name(a) = '{ foo }'", expr(_)))
-  // println(parse("name(a, b, c, d) = ''", expr(_)))
-  // println(parse("name = 'woot'", expr(_)))
-
-  // println(parse("f('foo')", expr(_)))
-  // println(parse("f(g(h))", expr(_)))
-
-  // println(parse("run 'some {template}' ", instr(_), verboseFailures = true))
-  // println(parse("call f(x)' ", instr(_), verboseFailures = true))
-  // println(parse("defer run 'some {template}' ", instr(_), verboseFailures = true))
-  // println(parse(
-  //  """[ run 'foo'
-  //     | defer run 'bar' ]""".stripMargin, instr(_), verboseFailures = true))
