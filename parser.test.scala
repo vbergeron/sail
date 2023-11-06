@@ -1,6 +1,5 @@
-//> using scala 3.3.1
-//> using test.dep org.scalameta::munit::0.7.29
-//> using dep "com.lihaoyi::fastparse:3.0.2"
+//> using scala "3.3.1"
+//> using test.dependency "org.scalameta::munit::0.7.29"
 
 package sail
 
