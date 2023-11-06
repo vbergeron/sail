@@ -1,8 +1,10 @@
 package sail
 
 import sail.parser.*
+
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
+import scala.io.Source
 
 type Env = Map[Expr.Sym, Expr]
 
@@ -29,6 +31,8 @@ def render(expr: Expr): String =
       s"<call $name(${args.map(render).mkString(",")})>"
     case Expr.Container(name, from, build) =>
       s"<container ${render(name)} from $from - $build>"
+    case Expr.Module(name, source)         =>
+      s"<module ${render(name)} - ${render(source)}"
 
 def reduceInstr(env: Env, instr: Instr): Instr =
   instr match
@@ -124,6 +128,11 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
 
     case instr: Instr => (env, reduceInstr(env, instr))
 
+    case module: Expr.Module =>
+      val env = loadFile(module.sourcePath.content).map: (sym, expr) =>
+        sym.copy(module = Some(module.name.value)) -> expr
+      (env, Expr.Unit)
+
 def reduceFile(exprs: Seq[Expr]): Env =
   exprs.foldLeft(Map.empty[Expr.Sym, Expr])(reduce(_, _)._1)
 
@@ -156,33 +165,19 @@ def resolveTargets(env: Env): Unit =
   env.values.collect:
     case it: Expr.Container => resolveContainer(it)
 
+def loadFile(path: String): Env =
+  val source = Source.fromFile(path)
+  try
+    println(s"loaded - $path")
+    reduceFile(parser.parse(source.getLines()))
+  finally source.close()
+
 @main
-def run: Unit =
-  val code =
-    """
-      |foo(name, value) =
-      |  let
-      |     from = '$HOME/{ name }'
-      |     to   = '/some/backup/{ from }'
-      |  in [
-      |    run       'cp { from } { to }'
-      |    expose    12345
-      |    copy  'foo' to to
-      |    defer run 'rm { from }'
-      |  ]
-      |
-      |container baz from 'debian:latest' with [
-      |  foo('a', 'b')
-      |]
-      |""".stripMargin
+def run(args: String*): Unit =
 
-  val parsed = parser.parse(code)
-  println(">> parsed")
-  parsed.foreach(println)
-
-  val reduced = reduceFile(parsed)
-  println(">> reduced")
-  reduced.foreach: (key, value) =>
-    println(s"${render(key)} = ${render(value)}")
+  val reduced = loadFile(args(0))
+  // println(">> reduced")
+  // reduced.foreach: (key, value) =>
+  //  println(s"${render(key)} = ${render(value)}")
 
   resolveTargets(reduced)

@@ -30,11 +30,13 @@ object Expr:
   case class Str(content: String)       extends Expr
 
   case class Num(value: BigDecimal)                         extends Expr
-  case class Sym(module: Option[String], value: String)                           extends Expr
+  case class Sym(module: Option[String], value: String)     extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
   case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
   case class Container(name: Sym, from: Str, build: Instr)  extends Expr
   case class Scope(bindings: Seq[FuncDef], body: Expr)      extends Expr
+
+  case class Module(name: Expr.Sym, sourcePath: Expr.Str) extends Expr
 
 sealed trait Instr extends Expr
 
@@ -47,7 +49,7 @@ object Instr:
   case class Defer(value: Instr)         extends Instr
 
 def expr[$: P]: P[Expr] =
-  scope | container | funcDef | instr | template | str | num | funcCall | sym
+  scope | container | module | funcDef | instr | template | str | num | funcCall | sym
 
 def instr[$: P]: P[Instr] =
   def run[$: P]: P[Instr.Run] =
@@ -121,6 +123,9 @@ def container[$: P]: P[Expr.Container] =
     "container" ~ ws ~ sym ~ ws ~ "from" ~ ws ~ str ~ ws ~ "with" ~ ws ~ instr
   )
     .map(Expr.Container.apply)
+
+def module[$: P]: P[Expr.Module] =
+  P("module" ~ ws ~ sym ~ ws ~ "<-" ~ ws ~ str).map(Expr.Module.apply)
 
 def file[$: P]: P[Seq[Expr]] =
   P(ws ~ (expr ~ ws).rep ~ ws)

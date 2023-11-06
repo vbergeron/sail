@@ -1,7 +1,7 @@
 //> using scala "3.3.1"
 //> using test.dependency "org.scalameta::munit::0.7.29"
 
-package sail
+package sail.parser
 
 import fastparse.*
 import munit.*
@@ -30,6 +30,9 @@ class ParserTest extends FunSuite:
         case failure: Parsed.Failure => ()
 
   passing("Expr.Symbol", "foo", sym(_))
+  passingT("Expr.Symbol", "foo:bar", sym(_)): t =>
+    assertEquals(t.module, Some("foo"))
+    assertEquals(t.name, "bar")
 
   passing("Expr.String", "''", str(_))
   passing("Expr.String", "'foobar fkl nadfn'", str(_))
