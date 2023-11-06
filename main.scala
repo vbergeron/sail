@@ -8,31 +8,50 @@ import scala.io.Source
 
 type Env = Map[Expr.Sym, Expr]
 
+def showPart(part: Part): String = part match
+  case Part.Capture(expr) => s"{ ${show(expr)} }"
+  case Part.Content(text) => text
+
+def showInstr(instr: Instr): String =
+  instr match
+    case Instr.Run(value)     => s"<run - ${show(value)}>"
+    case Instr.Expose(value)  => s"<expose - ${show(value)}>"
+    case Instr.Copy(src, dst) => s"<copy - ${show(src)} to ${show(dst)}>"
+    case Instr.Call(value)    => s"<call - ${show(value)}>"
+    case Instr.Block(values)  =>
+      s"<block ${values.map(show).mkString("[", ",", "]")}>"
+    case Instr.Defer(value)   => s"<defer - ${show(value)}>"
+
+def show(expr: Expr): String =
+  expr match
+    case instr: Instr                      => showInstr(instr)
+    case Expr.Unit                         => "<>"
+    case Expr.Scope(bindings, body)        =>
+      s"<scope ${bindings.map(show).mkString("[", ",", "]")} ${show(body)}"
+    case Expr.Template(parts)              => parts.map(showPart).mkString
+    case Expr.Str(content)                 => content
+    case Expr.Num(value)                   => value.toString()
+    case Expr.Sym(None, content)           => content
+    case Expr.Sym(Some(module), content)   => s"$module:$content"
+    case Expr.FuncDef(name, args, body)    =>
+      s"<func ${show(name)}(${args.map(show).mkString(",")}) - ${show(body)}>"
+    case Expr.FuncCall(name, args)         =>
+      s"<call $name(${args.map(show).mkString(",")})>"
+    case Expr.Container(name, from, build) =>
+      s"<container ${show(name)} from ${show(from)} - ${showInstr(build)}>"
+    case Expr.Module(name, source)         =>
+      s"<module ${show(name)} - ${show(source)}"
+
 def renderPart(part: Part): String = part match
   case Part.Capture(expr) => render(expr)
   case Part.Content(text) => text
 
 def render(expr: Expr): String =
   expr match
-    case instr: Instr                      => s"<instr $instr>"
-    case Expr.Unit                         => "<>"
-    case Expr.Scope(bindings, body)        =>
-      s"<scope ${bindings.map(render).mkString("[", ",", "]")} ${render(body)}"
-    case Expr.Template(parts)              => parts.map(renderPart).mkString
-    case Expr.Str(content)                 => content
-    case Expr.Num(value)                   => value.toString()
-    case Expr.Sym(None, content)           =>
-      s"<symbol $content>"
-    case Expr.Sym(Some(module), content)   =>
-      s"<symbol $module:$content>"
-    case Expr.FuncDef(name, args, body)    =>
-      s"<func ${render(name)}(${args.map(render).mkString(",")}) ${render(body)}>"
-    case Expr.FuncCall(name, args)         =>
-      s"<call $name(${args.map(render).mkString(",")})>"
-    case Expr.Container(name, from, build) =>
-      s"<container ${render(name)} from $from - $build>"
-    case Expr.Module(name, source)         =>
-      s"<module ${render(name)} - ${render(source)}"
+    case Expr.Template(parts) => parts.map(renderPart).mkString
+    case Expr.Str(content)    => content
+    case Expr.Num(value)      => value.toString()
+    case expr                 => throw Exception(s"Not renderable: ${show(expr)}")
 
 def reduceInstr(env: Env, instr: Instr): Instr =
   instr match
@@ -176,8 +195,8 @@ def loadFile(path: String): Env =
 def run(args: String*): Unit =
 
   val reduced = loadFile(args(0))
-  // println(">> reduced")
-  // reduced.foreach: (key, value) =>
-  //  println(s"${render(key)} = ${render(value)}")
+  println(">> reduced")
+  reduced.foreach: (key, value) =>
+    println(s"${show(key)} = ${show(value)}")
 
   resolveTargets(reduced)
