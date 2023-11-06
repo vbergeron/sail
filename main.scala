@@ -28,9 +28,11 @@ def part[$: P]: P[Part] =
 sealed trait Expr
 
 object Expr:
-  case object Unit                                          extends Expr
-  case class Template(parts: Seq[Part])                     extends Expr
-  case class Str(content: String)                           extends Expr
+  case object Unit                      extends Expr
+  case class Template(parts: Seq[Part]) extends Expr
+  case class Str(content: String)       extends Expr
+
+  case class Num(value: BigDecimal)                         extends Expr
   case class Sym(content: String)                           extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
   case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
@@ -40,17 +42,25 @@ object Expr:
 sealed trait Instr extends Expr
 
 object Instr:
-  case class Run(value: Expr)           extends Instr
-  case class Call(value: Expr.FuncCall) extends Instr
-  case class Block(values: Seq[Instr])  extends Instr
-  case class Defer(value: Instr)        extends Instr
+  case class Run(value: Expr)            extends Instr
+  case class Expose(value: Expr)         extends Instr
+  case class Copy(src: Expr, dest: Expr) extends Instr
+  case class Call(value: Expr.FuncCall)  extends Instr
+  case class Block(values: Seq[Instr])   extends Instr
+  case class Defer(value: Instr)         extends Instr
 
 def expr[$: P]: P[Expr] =
-  scope | container | funcDef | instr | template | str | funcCall | sym
+  scope | container | funcDef | instr | template | str | num | funcCall | sym
 
 def instr[$: P]: P[Instr] =
   def run[$: P]: P[Instr.Run] =
     P("run" ~ ws ~ expr).map(Instr.Run.apply)
+
+  def expose[$: P]: P[Instr.Expose] =
+    P("expose" ~ ws ~ expr).map(Instr.Expose.apply)
+
+  def copy[$: P]: P[Instr.Copy] =
+    P("copy" ~ ws ~ expr ~ ws ~ "to" ~ ws ~ expr).map(Instr.Copy.apply)
 
   def call[$: P]: P[Instr.Call] =
     P(ws ~ funcCall).map(Instr.Call.apply)
@@ -61,13 +71,18 @@ def instr[$: P]: P[Instr] =
   def defer[$: P]: P[Instr.Defer] =
     P("defer" ~ ws ~ instr).map(Instr.Defer.apply)
 
-  block | defer | run | call
+  block | defer | run | expose | copy | call
 
 def scope[$: P]: P[Expr.Scope] =
   P("let" ~ ws ~ (funcDef ~ ws).rep ~ "in" ~ ws ~ expr).map(Expr.Scope.apply)
 
 def str[$: P]: P[Expr.Str] =
   P("'" ~ CharPred(c => c != '\'').rep.! ~ "'").map(Expr.Str.apply)
+
+def num[$: P]: P[Expr.Num] =
+  P(CharsWhile(_.isDigit).! ~ ("." ~ CharsWhile(_.isDigit)).!.?)
+    .map: (principal, decimals) =>
+      Expr.Num(BigDecimal(principal + decimals.getOrElse("")))
 
 def sym[$: P]: P[Expr.Sym] = symbol.map(Expr.Sym.apply)
 
@@ -119,6 +134,7 @@ def render(expr: Expr): String =
       s"<scope ${bindings.map(render).mkString("[", ",", "]")} ${render(body)}"
     case Expr.Template(parts)              => parts.map(renderPart).mkString
     case Expr.Str(content)                 => content
+    case Expr.Num(value)                   => value.toString()
     case Expr.Sym(content)                 =>
       s"<symbol $content>"
     case Expr.FuncDef(name, args, body)    =>
@@ -130,10 +146,23 @@ def render(expr: Expr): String =
 
 def reduceInstr(env: Env, instr: Instr): Instr =
   instr match
-    case Instr.Run(value)    => Instr.Run(reduce(env, value)._2)
-    case Instr.Call(value)   => reduce(env, value)._2.asInstanceOf[Instr]
-    case Instr.Block(values) => Instr.Block(values.map(reduceInstr(env, _)))
-    case Instr.Defer(value)  => Instr.Defer(reduceInstr(env, value))
+    case Instr.Run(value) =>
+      Instr.Run(reduce(env, value)._2)
+
+    case Instr.Expose(value) =>
+      Instr.Expose(reduce(env, value)._2)
+
+    case Instr.Copy(src, dst) =>
+      Instr.Copy(reduce(env, src)._2, reduce(env, dst)._2)
+
+    case Instr.Call(value) =>
+      reduce(env, value)._2.asInstanceOf[Instr]
+
+    case Instr.Block(values) =>
+      Instr.Block(values.map(reduceInstr(env, _)))
+
+    case Instr.Defer(value) =>
+      Instr.Defer(reduceInstr(env, value))
 
 def reducePart(env: Env, part: Part): Part = part match
   case p: Part.Capture =>
@@ -142,15 +171,44 @@ def reducePart(env: Env, part: Part): Part = part match
       case expr              => Part.Capture(expr)
   case p: Part.Content => p
 
+def simplify(template: Expr.Template): Expr.Template =
+  @tailrec
+  def go(
+      parts: List[Part],
+      keep: Option[Part.Content],
+      acc: List[Part]
+  ): List[Part] =
+    parts match
+      case (head: Part.Content) :: tail =>
+        keep match
+          case Some(part) =>
+            go(tail, Some(Part.Content(part.text + head.text)), acc)
+          case None       =>
+            go(tail, Some(head), acc)
+
+      case (head: Part.Capture) :: tail =>
+        keep match
+          case Some(part) =>
+            go(tail, None, head :: part :: acc)
+          case None       =>
+            go(tail, None, head :: acc)
+      case Nil                          =>
+        keep match
+          case Some(part) =>
+            part :: acc
+          case None       =>
+            acc
+  Expr.Template(go(template.parts.toList, None, Nil).reverse)
+
 def reduceTemplate(env: Env, template: Expr.Template): Expr.Template =
-  println(template.parts)
-  Expr.Template(template.parts.map(reducePart(env, _)))
+  simplify(Expr.Template(template.parts.map(reducePart(env, _))))
 
 def reduce(env: Env, expr: Expr): (Env, Expr) =
   expr match
     case Expr.Unit         => (env, Expr.Unit)
     case it: Expr.Template => (env, reduceTemplate(env, it))
     case it: Expr.Str      => env -> it
+    case it: Expr.Num      => env -> it
     case it: Expr.Sym      =>
       env.get(it).fold(env -> it)(v => env -> reduce(env, v)._2)
     case it: Expr.FuncDef  =>
@@ -191,12 +249,17 @@ def resolveContainer(container: Expr.Container): Unit =
 
   def go(add: String => Unit, instr: Instr): Unit =
     instr match
-      case Instr.Run(value)    =>
+      case Instr.Run(value)     =>
         add(s"RUN ${render(value)}")
-      case Instr.Call(_)       => add("unresolved call")
-      case Instr.Block(values) =>
+      case Instr.Expose(value)  =>
+        add(s"EXPOSE ${render(value)}")
+      case Instr.Copy(src, dst) =>
+        add(s"COPY ${render(src)} ${render(dst)}")
+      case Instr.Call(call)     =>
+        throw new Exception(s"Unresolved call: $call")
+      case Instr.Block(values)  =>
         values.foreach(go(add, _))
-      case Instr.Defer(value)  =>
+      case Instr.Defer(value)   =>
         go(deferred.addOne, value)
 
   go(instructions.addOne, container.build)
@@ -217,12 +280,13 @@ def run: Unit =
       |     to   = '/some/backup/{ from }'
       |  in [
       |    run       'cp { from } { to }'
+      |    expose    12345
+      |    copy  'foo' to to
       |    defer run 'rm { from }'
       |  ]
       |
       |container baz from 'debian:latest' with [
       |  foo('a', 'b')
-      |  foo('c', 'd')
       |]
       |""".stripMargin
 
