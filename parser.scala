@@ -28,7 +28,6 @@ object Expr:
   case object Unit                      extends Expr
   case class Template(parts: Seq[Part]) extends Expr
   case class Str(content: String)       extends Expr
-
   case class Num(value: BigDecimal)                         extends Expr
   case class Sym(module: Option[String], value: String)     extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr

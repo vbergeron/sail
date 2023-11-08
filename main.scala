@@ -28,8 +28,8 @@ def show(expr: Expr): String =
     case Expr.Unit                         => "<>"
     case Expr.Scope(bindings, body)        =>
       s"<scope ${bindings.map(show).mkString("[", ",", "]")} ${show(body)}"
-    case Expr.Template(parts)              => parts.map(showPart).mkString
-    case Expr.Str(content)                 => content
+    case Expr.Template(parts)              => parts.map(showPart).mkString("'", "", "'")
+    case Expr.Str(content)                 => s"'$content'"
     case Expr.Num(value)                   => value.toString()
     case Expr.Sym(None, content)           => content
     case Expr.Sym(Some(module), content)   => s"$module:$content"
@@ -48,10 +48,13 @@ def renderPart(part: Part): String = part match
 
 def render(expr: Expr): String =
   expr match
-    case Expr.Template(parts) => parts.map(renderPart).mkString
-    case Expr.Str(content)    => content
-    case Expr.Num(value)      => value.toString()
-    case expr                 => throw Exception(s"Not renderable: ${show(expr)}")
+    case expr: Expr.Template =>
+      throw Exception(
+        s"Template is not reduced ${show(expr)}"
+      ) // parts.map(renderPart).mkString
+    case Expr.Str(content)   => content
+    case Expr.Num(value)     => value.toString()
+    case expr                => throw Exception(s"Not renderable: ${show(expr)}")
 
 def reduceInstr(env: Env, instr: Instr): Instr =
   instr match
@@ -76,8 +79,9 @@ def reduceInstr(env: Env, instr: Instr): Instr =
 def reducePart(env: Env, part: Part): Part = part match
   case p: Part.Capture =>
     reduce(env, p.expr)._2 match
-      case Expr.Str(content) => Part.Content(content)
-      case expr              => Part.Capture(expr)
+      case Expr.Str(text)  => Part.Content(text)
+      case Expr.Num(value) => Part.Content(value.toString)
+      case expr            => Part.Capture(expr)
   case p: Part.Content => p
 
 def simplify(template: Expr.Template): Expr.Template =
@@ -109,8 +113,20 @@ def simplify(template: Expr.Template): Expr.Template =
             acc
   Expr.Template(go(template.parts.toList, None, Nil).reverse)
 
-def reduceTemplate(env: Env, template: Expr.Template): Expr.Template =
-  simplify(Expr.Template(template.parts.map(reducePart(env, _))))
+def normalizePart(part: Part): Seq[Part]        =
+  part match
+    case p: Part.Content                   => Seq(p)
+    case Part.Capture(expr: Expr.Template) => normalizeParts(expr.parts)
+    case p: Part.Capture                   => Seq(p)
+def normalizeParts(parts: Seq[Part]): Seq[Part] =
+  parts.flatMap(normalizePart)
+
+def reduceTemplate(env: Env, template: Expr.Template): Expr =
+  val reduced    = template.parts.map(reducePart(env, _))
+  val normalized = Expr.Template(normalizeParts(reduced))
+  simplify(normalized) match
+    case Expr.Template(Seq(Part.Content(text))) => Expr.Str(text)
+    case expr                                   => expr
 
 def reduce(env: Env, expr: Expr): (Env, Expr) =
   expr match
@@ -170,7 +186,7 @@ def resolveContainer(container: Expr.Container): Unit =
       case Instr.Copy(src, dst) =>
         add(s"COPY ${render(src)} ${render(dst)}")
       case Instr.Call(call)     =>
-        throw new Exception(s"Unresolved call: $call")
+        throw new Exception(s"Unresolved call: ${show(call)}")
       case Instr.Block(values)  =>
         values.foreach(go(add, _))
       case Instr.Defer(value)   =>
