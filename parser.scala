@@ -3,7 +3,6 @@ package sail.parser
 import fastparse.*
 import NoWhitespace.*
 
-
 def symbol[$: P] = P(CharPred(_.isLetter).rep.!).filter(_.nonEmpty)
 
 def ws[$: P] = P(CharsWhile(_.isWhitespace).rep)
@@ -25,9 +24,9 @@ sealed trait Expr
 
 object Expr:
 
-  case object Unit                      extends Expr
-  case class Template(parts: Seq[Part]) extends Expr
-  case class Str(content: String)       extends Expr
+  case object Unit                                          extends Expr
+  case class Template(parts: Seq[Part])                     extends Expr
+  case class Str(content: String)                           extends Expr
   case class Num(value: BigDecimal)                         extends Expr
   case class Sym(module: Option[String], value: String)     extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
@@ -64,12 +63,15 @@ def instr[$: P]: P[Instr] =
     P(ws ~ funcCall).map(Instr.Call.apply)
 
   def block[$: P]: P[Instr.Block] =
-    P("[" ~ ws ~ (instr ~ ws).rep ~ ws ~ "]").map(Instr.Block.apply)
+    P("[" ~ ws ~ (rec ~ ws).rep ~ ws ~ "]").map(Instr.Block.apply)
 
   def defer[$: P]: P[Instr.Defer] =
-    P("defer" ~ ws ~ instr).map(Instr.Defer.apply)
+    P("defer" ~ ws ~ rec).map(Instr.Defer.apply)
 
-  block | defer | run | expose | copy | call
+  def rec[$: P]: P[Instr] =
+    block | defer | run | expose | copy | call
+
+  block | defer | run | expose | copy
 
 def scope[$: P]: P[Expr.Scope] =
   P("let" ~ ws ~ (funcDef ~ ws).rep ~ "in" ~ ws ~ expr).map(Expr.Scope.apply)
@@ -87,7 +89,7 @@ def sym[$: P]: P[Expr.Sym] =
     (symbol ~ ":" ~ symbol).map: (module, name) =>
       Expr.Sym(Some(module), name)
 
-  def unqualified[$:P]:P[Expr.Sym] =
+  def unqualified[$: P]: P[Expr.Sym] =
     symbol.map(Expr.Sym(None, _))
 
   qualified | unqualified

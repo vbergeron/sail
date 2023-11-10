@@ -113,11 +113,12 @@ def simplify(template: Expr.Template): Expr.Template =
             acc
   Expr.Template(go(template.parts.toList, None, Nil).reverse)
 
-def normalizePart(part: Part): Seq[Part]        =
+def normalizePart(part: Part): Seq[Part] =
   part match
     case p: Part.Content                   => Seq(p)
     case Part.Capture(expr: Expr.Template) => normalizeParts(expr.parts)
     case p: Part.Capture                   => Seq(p)
+
 def normalizeParts(parts: Seq[Part]): Seq[Part] =
   parts.flatMap(normalizePart)
 
@@ -154,6 +155,7 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
       reduce(env ++ locals, func.body)
 
     case Expr.Container(name, from, build) =>
+      println(build)
       val reduced = Expr.Container(name, from, reduceInstr(env, build))
       (env + (name -> reduced), Expr.Unit)
 

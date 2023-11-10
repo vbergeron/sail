@@ -12,14 +12,16 @@ class ParserTest extends FunSuite:
     test(s"$prefix - $code"):
       parse(code, parser, verboseFailures = true) match
         case Parsed.Success(value, index) => ()
-        case failure: Parsed.Failure =>
+        case failure: Parsed.Failure      =>
           fail(failure.longMsg)
 
-  def passingT[T](prefix: String, code: String, parser: P[?] => P[T])(check: T => Unit): Unit =
+  def passingT[T](prefix: String, code: String, parser: P[?] => P[T])(
+      check: T => Unit
+  ): Unit =
     test(s"$prefix - $code"):
       parse(code, parser, verboseFailures = true) match
         case Parsed.Success(value, index) => check(value)
-        case failure: Parsed.Failure =>
+        case failure: Parsed.Failure      =>
           fail(failure.longMsg)
 
   def failing[T](prefix: String, code: String, parser: P[?] => P[T]): Unit =
@@ -27,12 +29,12 @@ class ParserTest extends FunSuite:
       parse(code, parser, verboseFailures = true) match
         case Parsed.Success(value, index) =>
           fail(s"Expected parsing failure, got $value at $index")
-        case failure: Parsed.Failure => ()
+        case failure: Parsed.Failure      => ()
 
   passing("Expr.Symbol", "foo", sym(_))
   passingT("Expr.Symbol", "foo:bar", sym(_)): t =>
     assertEquals(t.module, Some("foo"))
-    assertEquals(t.name, "bar")
+    assertEquals(t.value, "bar")
 
   passing("Expr.String", "''", str(_))
   passing("Expr.String", "'foobar fkl nadfn'", str(_))
@@ -50,25 +52,43 @@ class ParserTest extends FunSuite:
   passing("Template", "'{ foo }'", template(_))
 
   passingT("Template", "'foobar fkl nadfn {foo}'", template(_)): t =>
-    assertEquals(t.parts, Seq(Part.Content("foobar fkl nadfn "), Part.Capture(Expr.Sym("foo"))))
+    assertEquals(
+      t.parts,
+      Seq(
+        Part.Content("foobar fkl nadfn "),
+        Part.Capture(Expr.Sym(None, "foo"))
+      )
+    )
 
   passingT("Template", "'{foo} foobar fkl nadfn'", template(_)): t =>
-    assertEquals(t.parts, Seq(Part.Capture(Expr.Sym("foo")), Part.Content(" foobar fkl nadfn")))
+    assertEquals(
+      t.parts,
+      Seq(
+        Part.Capture(Expr.Sym(None, "foo")),
+        Part.Content(" foobar fkl nadfn")
+      )
+    )
 
   passingT("Template", "'foobar fkl {foo} nadfn'", template(_)): t =>
-    assertEquals(t.parts, Seq(
-      Part.Content("foobar fkl "),
-      Part.Capture(Expr.Sym("foo")),
-      Part.Content(" nadfn")
-    ))
+    assertEquals(
+      t.parts,
+      Seq(
+        Part.Content("foobar fkl "),
+        Part.Capture(Expr.Sym(None, "foo")),
+        Part.Content(" nadfn")
+      )
+    )
 
   passingT("Template", "'{foo} foobar {fkl} nadfn'", template(_)): t =>
-    assertEquals(t.parts, Seq(
-      Part.Capture(Expr.Sym("foo")),
-      Part.Content(" foobar "),
-      Part.Capture(Expr.Sym("fkl")),
-      Part.Content(" nadfn")
-    ))
+    assertEquals(
+      t.parts,
+      Seq(
+        Part.Capture(Expr.Sym(None, "foo")),
+        Part.Content(" foobar "),
+        Part.Capture(Expr.Sym(None, "fkl")),
+        Part.Content(" nadfn")
+      )
+    )
 
   passing("FuncDef", "f = body", funcDef(_))
   passing("FuncDef", "f(a) = body", funcDef(_))
@@ -84,4 +104,3 @@ class ParserTest extends FunSuite:
   passing("Scope", "let a(x) = b in body", scope(_))
 
   passing("Containter", "container a from 'scratch' with run ''", container(_))
-
