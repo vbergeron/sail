@@ -42,16 +42,10 @@ def show(expr: Expr): String =
     case Expr.Module(name, source)         =>
       s"<module ${show(name)} - ${show(source)}"
 
-def renderPart(part: Part): String = part match
-  case Part.Capture(expr) => render(expr)
-  case Part.Content(text) => text
-
 def render(expr: Expr): String =
   expr match
     case expr: Expr.Template =>
-      throw Exception(
-        s"Template is not reduced ${show(expr)}"
-      ) // parts.map(renderPart).mkString
+      throw Exception(s"Template is not reduced ${show(expr)}")
     case Expr.Str(content)   => content
     case Expr.Num(value)     => value.toString()
     case expr                => throw Exception(s"Not renderable: ${show(expr)}")
@@ -113,14 +107,11 @@ def simplify(template: Expr.Template): Expr.Template =
             acc
   Expr.Template(go(template.parts.toList, None, Nil).reverse)
 
-def normalizePart(part: Part): Seq[Part] =
-  part match
+def normalizeParts(parts: Seq[Part]): Seq[Part] =
+  parts.flatMap:
     case p: Part.Content                   => Seq(p)
     case Part.Capture(expr: Expr.Template) => normalizeParts(expr.parts)
     case p: Part.Capture                   => Seq(p)
-
-def normalizeParts(parts: Seq[Part]): Seq[Part] =
-  parts.flatMap(normalizePart)
 
 def reduceTemplate(env: Env, template: Expr.Template): Expr =
   val reduced    = template.parts.map(reducePart(env, _))
@@ -155,7 +146,6 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
       reduce(env ++ locals, func.body)
 
     case Expr.Container(name, from, build) =>
-      println(build)
       val reduced = Expr.Container(name, from, reduceInstr(env, build))
       (env + (name -> reduced), Expr.Unit)
 
