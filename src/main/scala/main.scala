@@ -5,6 +5,8 @@ import sail.parser.*
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
+import com.monovore.decline.CommandApp
+import com.monovore.decline.Opts
 
 type Env = Map[Expr.Sym, Expr]
 
@@ -50,29 +52,29 @@ def render(expr: Expr): String =
     case Expr.Num(value)     => value.toString()
     case expr                => throw Exception(s"Not renderable: ${show(expr)}")
 
-def reduceInstr(env: Env, instr: Instr): Instr =
+def reduceInstr(cmd: Args, env: Env, instr: Instr): Instr =
   instr match
     case Instr.Run(value) =>
-      Instr.Run(reduce(env, value)._2)
+      Instr.Run(reduce(cmd, env, value)._2)
 
     case Instr.Expose(value) =>
-      Instr.Expose(reduce(env, value)._2)
+      Instr.Expose(reduce(cmd, env, value)._2)
 
     case Instr.Copy(src, dst) =>
-      Instr.Copy(reduce(env, src)._2, reduce(env, dst)._2)
+      Instr.Copy(reduce(cmd, env, src)._2, reduce(cmd, env, dst)._2)
 
     case Instr.Call(value) =>
-      reduce(env, value)._2.asInstanceOf[Instr]
+      reduce(cmd, env, value)._2.asInstanceOf[Instr]
 
     case Instr.Block(values) =>
-      Instr.Block(values.map(reduceInstr(env, _)))
+      Instr.Block(values.map(reduceInstr(cmd, env, _)))
 
     case Instr.Defer(value) =>
-      Instr.Defer(reduceInstr(env, value))
+      Instr.Defer(reduceInstr(cmd, env, value))
 
-def reducePart(env: Env, part: Part): Part = part match
+def reducePart(cmd: Args, env: Env, part: Part): Part = part match
   case p: Part.Capture =>
-    reduce(env, p.expr)._2 match
+    reduce(cmd, env, p.expr)._2 match
       case Expr.Str(text)  => Part.Content(text)
       case Expr.Num(value) => Part.Content(value.toString)
       case expr            => Part.Capture(expr)
@@ -113,23 +115,23 @@ def normalizeParts(parts: Seq[Part]): Seq[Part] =
     case Part.Capture(expr: Expr.Template) => normalizeParts(expr.parts)
     case p: Part.Capture                   => Seq(p)
 
-def reduceTemplate(env: Env, template: Expr.Template): Expr =
-  val reduced    = template.parts.map(reducePart(env, _))
+def reduceTemplate(cmd: Args, env: Env, template: Expr.Template): Expr =
+  val reduced    = template.parts.map(reducePart(cmd, env, _))
   val normalized = Expr.Template(normalizeParts(reduced))
   simplify(normalized) match
     case Expr.Template(Seq(Part.Content(text))) => Expr.Str(text)
     case expr                                   => expr
 
-def reduce(env: Env, expr: Expr): (Env, Expr) =
+def reduce(cmd: Args, env: Env, expr: Expr): (Env, Expr) =
   expr match
     case Expr.Unit         => (env, Expr.Unit)
-    case it: Expr.Template => (env, reduceTemplate(env, it))
+    case it: Expr.Template => (env, reduceTemplate(cmd, env, it))
     case it: Expr.Str      => env -> it
     case it: Expr.Num      => env -> it
     case it: Expr.Sym      =>
-      env.get(it).fold(env -> it)(v => env -> reduce(env, v)._2)
+      env.get(it).fold(env -> it)(v => env -> reduce(cmd, env, v)._2)
     case it: Expr.FuncDef  =>
-      val reduced = it.copy(body = reduce(env, it.body)._2)
+      val reduced = it.copy(body = reduce(cmd, env, it.body)._2)
       reduced match
         case Expr.FuncDef(_, Seq(), body) =>
           (env + (it.name -> body), Expr.Unit)
@@ -141,27 +143,27 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
         case it: Expr.FuncDef => it
         case it               => throw new Exception(s"$it is not callable")
 
-      val locals = func.args zip args.map(reduce(env, _)._2)
+      val locals = func.args zip args.map(reduce(cmd, env, _)._2)
 
-      reduce(env ++ locals, func.body)
+      reduce(cmd, env ++ locals, func.body)
 
     case Expr.Container(from, build) =>
-      val reduced = Expr.Container(from, reduceInstr(env, build))
+      val reduced = Expr.Container(from, reduceInstr(cmd, env, build))
       (env, reduced)
 
     case Expr.Scope(bindings, body) =>
-      val scope = bindings.foldLeft(env)(reduce(_, _)._1)
-      reduce(scope, body)
+      val scope = bindings.foldLeft(env)(reduce(cmd, _, _)._1)
+      reduce(cmd, scope, body)
 
-    case instr: Instr => (env, reduceInstr(env, instr))
+    case instr: Instr => (env, reduceInstr(cmd, env, instr))
 
     case module: Expr.Module =>
-      val env = loadFile(module.sourcePath.content).map: (sym, expr) =>
-        sym.copy(module = Some(module.name.value)) -> expr
+      val env = loadFile(cmd.copy(source = module.sourcePath.content)).map:
+        (sym, expr) => sym.copy(module = Some(module.name.value)) -> expr
       (env, Expr.Unit)
 
-def reduceFile(exprs: Seq[Expr]): Env =
-  exprs.foldLeft(Map.empty[Expr.Sym, Expr])(reduce(_, _)._1)
+def reduceFile(cmd: Args, exprs: Seq[Expr]): Env =
+  exprs.foldLeft(Map.empty[Expr.Sym, Expr])(reduce(cmd, _, _)._1)
 
 def resolveContainer(container: Expr.Container): Unit =
   val instructions = ListBuffer.empty[String]
@@ -192,22 +194,64 @@ def resolveTargets(env: Env): Unit =
   env.values.collect:
     case it: Expr.Container => resolveContainer(it)
 
-def loadFile(path: String): Env =
-  val source = Source.fromFile(path)
+def loadFile(args: Args): Env =
+  val source = Source.fromFile(args.source)
   try
-    println(s"loaded - $path")
+    if args.showFileLoad then //
+      println(s"loaded - ${args.source}")
+
     val parsed = parser.parse(source.getLines())
-    println(">> parsed")
-    println(parsed)
-    reduceFile(parsed)
+
+    if args.showParsing then
+      println(">> parsed")
+      parsed.foreach: expr =>
+        println(show(expr))
+
+    reduceFile(args, parsed)
   finally source.close()
 
-@main
-def run(args: String*): Unit =
+def run(args: Args): Unit =
+  val reduced = loadFile(args)
 
-  val reduced = loadFile(args(0))
-  println(">> reduced")
-  reduced.foreach: (key, value) =>
-    println(s"${show(key)} = ${show(value)}")
+  if args.showReduction then
+    println(">> reduced")
+    reduced.foreach: (key, value) =>
+      println(s"${show(key)} = ${show(value)}")
 
   resolveTargets(reduced)
+
+final case class Args(
+    showParsing: Boolean,
+    showReduction: Boolean,
+    showFileLoad: Boolean,
+    source: String
+)
+
+object Sail
+    extends CommandApp(
+      name = "sail",
+      header = "A Functional, Declarative Dockerfile generator",
+      main = {
+        val showParsing =
+          Opts
+            .flag("show-parsing", "Show all files parsing output")
+            .orFalse
+
+        val showReduction =
+          Opts
+            .flag("show-reduction", "Show all files reduction output")
+            .orFalse
+
+        val showFileLoad =
+          Opts
+            .flag("show-file-load", "Show all files loads")
+            .orTrue
+
+        val source = Opts.argument[String]("source").withDefault("build.sail")
+
+        import cats.syntax.all.*
+        (showParsing, showReduction, showFileLoad, source)
+          .mapN(Args.apply)
+          .map(run)
+      }
+    )
