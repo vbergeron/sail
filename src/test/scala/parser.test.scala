@@ -1,6 +1,3 @@
-//> using scala "3.3.1"
-//> using test.dependency "org.scalameta::munit::0.7.29"
-
 package sail.parser
 
 import fastparse.*
