@@ -1,5 +1,6 @@
-foo(arg) = 'some {arg}'
+foo(arg): 
+  'some {arg}'
 
-container baz from 'debian:latest' with
+build: container from 'debian:latest':
   run '{foo('bar')}'
 

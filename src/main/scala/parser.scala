@@ -31,7 +31,7 @@ object Expr:
   case class Sym(module: Option[String], value: String)     extends Expr
   case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
   case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
-  case class Container(name: Sym, from: Str, build: Instr)  extends Expr
+  case class Container(from: Str, build: Instr)             extends Expr
   case class Scope(bindings: Seq[FuncDef], body: Expr)      extends Expr
 
   case class Module(name: Expr.Sym, sourcePath: Expr.Str) extends Expr
@@ -102,13 +102,13 @@ def template[$: P]: P[Expr.Template] =
 def funcDef[$: P]: P[Expr.FuncDef] =
   def funcDefN[$: P]: P[Expr.FuncDef] =
     P(
-      sym ~ ws ~ "(" ~ ws ~ sym ~ (ws ~ "," ~ ws ~ sym).rep ~ ws ~ ")" ~ ws ~ "=" ~ ws ~ expr
+      sym ~ ws ~ "(" ~ ws ~ sym ~ (ws ~ "," ~ ws ~ sym).rep ~ ws ~ ")" ~ ws ~ ":" ~ ws ~ expr
     )
       .map: (name, head, tail, body) =>
         Expr.FuncDef(name, head +: tail, body)
 
   def funcDef0[$: P]: P[Expr.FuncDef] =
-    P(sym ~ ws ~ "=" ~ ws ~ expr)
+    P(sym ~ ws ~ ":" ~ ws ~ expr)
       .map: (name, body) =>
         Expr.FuncDef(name, Seq.empty, body)
 
@@ -121,7 +121,7 @@ def funcCall[$: P]: P[Expr.FuncCall] =
 
 def container[$: P]: P[Expr.Container] =
   P(
-    "container" ~ ws ~ sym ~ ws ~ "from" ~ ws ~ str ~ ws ~ "with" ~ ws ~ instr
+    "container" ~ ws ~ "from" ~ ws ~ str ~ ws ~ ":" ~ ws ~ instr
   )
     .map(Expr.Container.apply)
 

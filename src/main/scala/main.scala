@@ -24,22 +24,22 @@ def showInstr(instr: Instr): String =
 
 def show(expr: Expr): String =
   expr match
-    case instr: Instr                      => showInstr(instr)
-    case Expr.Unit                         => "<>"
-    case Expr.Scope(bindings, body)        =>
+    case instr: Instr                    => showInstr(instr)
+    case Expr.Unit                       => "<>"
+    case Expr.Scope(bindings, body)      =>
       s"<scope ${bindings.map(show).mkString("[", ",", "]")} ${show(body)}"
-    case Expr.Template(parts)              => parts.map(showPart).mkString("'", "", "'")
-    case Expr.Str(content)                 => s"'$content'"
-    case Expr.Num(value)                   => value.toString()
-    case Expr.Sym(None, content)           => content
-    case Expr.Sym(Some(module), content)   => s"$module:$content"
-    case Expr.FuncDef(name, args, body)    =>
+    case Expr.Template(parts)            => parts.map(showPart).mkString("'", "", "'")
+    case Expr.Str(content)               => s"'$content'"
+    case Expr.Num(value)                 => value.toString()
+    case Expr.Sym(None, content)         => content
+    case Expr.Sym(Some(module), content) => s"$module:$content"
+    case Expr.FuncDef(name, args, body)  =>
       s"<func ${show(name)}(${args.map(show).mkString(",")}) - ${show(body)}>"
-    case Expr.FuncCall(name, args)         =>
+    case Expr.FuncCall(name, args)       =>
       s"<call $name(${args.map(show).mkString(",")})>"
-    case Expr.Container(name, from, build) =>
-      s"<container ${show(name)} from ${show(from)} - ${showInstr(build)}>"
-    case Expr.Module(name, source)         =>
+    case Expr.Container(from, build)     =>
+      s"<container from ${show(from)} - ${showInstr(build)}>"
+    case Expr.Module(name, source)       =>
       s"<module ${show(name)} - ${show(source)}"
 
 def render(expr: Expr): String =
@@ -145,9 +145,9 @@ def reduce(env: Env, expr: Expr): (Env, Expr) =
 
       reduce(env ++ locals, func.body)
 
-    case Expr.Container(name, from, build) =>
-      val reduced = Expr.Container(name, from, reduceInstr(env, build))
-      (env + (name -> reduced), Expr.Unit)
+    case Expr.Container(from, build) =>
+      val reduced = Expr.Container(from, reduceInstr(env, build))
+      (env, reduced)
 
     case Expr.Scope(bindings, body) =>
       val scope = bindings.foldLeft(env)(reduce(_, _)._1)
@@ -196,7 +196,10 @@ def loadFile(path: String): Env =
   val source = Source.fromFile(path)
   try
     println(s"loaded - $path")
-    reduceFile(parser.parse(source.getLines()))
+    val parsed = parser.parse(source.getLines())
+    println(">> parsed")
+    println(parsed)
+    reduceFile(parsed)
   finally source.close()
 
 @main

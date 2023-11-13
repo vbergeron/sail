@@ -87,17 +87,17 @@ class ParserTest extends FunSuite:
       )
     )
 
-  passing("FuncDef", "f = body", funcDef(_))
-  passing("FuncDef", "f(a) = body", funcDef(_))
-  passing("FuncDef", "f(a,b,c,d) = body", funcDef(_))
+  passing("FuncDef", "f: body", funcDef(_))
+  passing("FuncDef", "f(a): body", funcDef(_))
+  passing("FuncDef", "f(a,b,c,d): body", funcDef(_))
 
   failing("FuncCall", "f()", funcCall(_))
   passing("FuncCall", "f('str')", funcCall(_))
-  passing("FuncCall", "f(g(x)) = body", funcCall(_))
+  passing("FuncCall", "f(g(x))", funcCall(_))
   passing("FuncCall", "f(a,b,c)", funcCall(_))
 
-  passing("Scope", "let a = b in body", scope(_))
-  passing("Scope", "let a = b c = d in body", scope(_))
-  passing("Scope", "let a(x) = b in body", scope(_))
+  passing("Scope", "let a: b in body", scope(_))
+  passing("Scope", "let a: b c: d in body", scope(_))
+  passing("Scope", "let a(x): b in body", scope(_))
 
-  passing("Containter", "container a from 'scratch' with run ''", container(_))
+  passing("Containter", "container from 'scratch': run ''", container(_))
