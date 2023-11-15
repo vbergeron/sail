@@ -1,12 +1,11 @@
 package sail
 
+import com.monovore.decline.{CommandApp, Opts}
 import sail.parser.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
-import com.monovore.decline.CommandApp
-import com.monovore.decline.Opts
 
 type Env = Map[Expr.Sym, Expr]
 
@@ -157,9 +156,9 @@ def reduce(cmd: Args, env: Env, expr: Expr): (Env, Expr) =
 
     case instr: Instr => (env, reduceInstr(cmd, env, instr))
 
-    case module: Expr.Module =>
-      val env = loadFile(cmd.copy(source = module.sourcePath.content)).map:
-        (sym, expr) => sym.copy(module = Some(module.name.value)) -> expr
+    case mod: Expr.Module =>
+      val env = loadFile(cmd.copy(source = mod.sourcePath.content)).map:
+        (sym, expr) => sym.copy(module = Some(mod.name.value)) -> expr
       (env, Expr.Unit)
 
 def reduceFile(cmd: Args, exprs: Seq[Expr]): Env =

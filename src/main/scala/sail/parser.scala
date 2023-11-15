@@ -1,7 +1,7 @@
 package sail.parser
 
 import fastparse.*
-import NoWhitespace.*
+import fastparse.NoWhitespace.*
 
 def symbol[$: P] = P(CharPred(_.isLetter).rep.!).filter(_.nonEmpty)
 

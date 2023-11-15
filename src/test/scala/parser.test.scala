@@ -2,6 +2,7 @@ package sail.parser
 
 import fastparse.*
 import munit.*
+import sail.{Expr, Part}
 
 class ParserTest extends FunSuite:
 
