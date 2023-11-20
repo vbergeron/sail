@@ -91,14 +91,14 @@ def reduceBool(cmd: Args, env: Env, expr: BooleanExpr): BooleanExpr =
         throw Exception(s"Expression did not reduce to boolean : $e")
 
   expr match
-    case True                  => True
-    case False                 => False
-    case Not(e) => if subReduce(e) == True then False else True
+    case True      => True
+    case False     => False
+    case Not(e)    => if subReduce(e) == True then False else True
     case And(l, r) =>
       if subReduce(l) == True && subReduce(r) == True then True else False
     case Or(l, r)  =>
       if subReduce(l) == False && subReduce(r) == False then False else True
-    case Eq(l, r) =>
+    case Eq(l, r)  =>
       if subReduce(l) == subReduce(r) then True else False
 
 def reducePart(cmd: Args, env: Env, part: Part): Part = part match
