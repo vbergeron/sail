@@ -16,6 +16,16 @@ object Expr:
 
   case class Module(name: Expr.Sym, sourcePath: Expr.Str) extends Expr
 
+sealed trait BooleanExpr extends Expr
+
+object BooleanExpr:
+  case object True                 extends BooleanExpr
+  case object False                extends BooleanExpr
+  case class And(l: Expr, r: Expr) extends BooleanExpr
+  case class Or(l: Expr, r: Expr)  extends BooleanExpr
+  case class Not(expr: Expr)       extends BooleanExpr
+  case class Eq(l: Expr, r: Expr)  extends BooleanExpr
+
 sealed trait Instr extends Expr
 
 object Instr:

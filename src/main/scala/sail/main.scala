@@ -24,9 +24,17 @@ def showInstr(instr: Instr): String =
       s"<block ${values.map(show).mkString("[", ",", "]")}>"
     case Instr.Defer(value)   => s"<defer - ${show(value)}>"
 
+def showBoolean(expr: BooleanExpr): String =
+  expr match
+    case BooleanExpr.True      => "true"
+    case BooleanExpr.False     => "false"
+    case BooleanExpr.And(l, r) => s"${show(l)} and ${show(r)}"
+    case BooleanExpr.Or(l, r)  => s"${show(l)} or ${show(r)}"
+
 def show(expr: Expr): String =
   expr match
     case instr: Instr                    => showInstr(instr)
+    case expr: BooleanExpr               => showBoolean(expr)
     case Expr.Unit                       => "<>"
     case Expr.Scope(bindings, body)      =>
       s"<scope ${bindings.map(show).mkString("[", ",", "]")} ${show(body)}"
@@ -71,6 +79,27 @@ def reduceInstr(cmd: Args, env: Env, instr: Instr): Instr =
 
     case Instr.Defer(value) =>
       Instr.Defer(reduceInstr(cmd, env, value))
+
+def reduceBool(cmd: Args, env: Env, expr: BooleanExpr): BooleanExpr =
+  import BooleanExpr.*
+
+  def subReduce(expr: Expr): True.type | False.type =
+    reduce(cmd, env, expr)._2 match
+      case x: (True.type | False.type) =>
+        x
+      case e                           =>
+        throw Exception(s"Expression did not reduce to boolean : $e")
+
+  expr match
+    case True                  => True
+    case False                 => False
+    case Not(e) => if subReduce(e) == True then False else True
+    case And(l, r) =>
+      if subReduce(l) == True && subReduce(r) == True then True else False
+    case Or(l, r)  =>
+      if subReduce(l) == False && subReduce(r) == False then False else True
+    case Eq(l, r) =>
+      if subReduce(l) == subReduce(r) then True else False
 
 def reducePart(cmd: Args, env: Env, part: Part): Part = part match
   case p: Part.Capture =>
@@ -156,6 +185,8 @@ def reduce(cmd: Args, env: Env, expr: Expr): (Env, Expr) =
       reduce(cmd, scope, body)
 
     case instr: Instr => (env, reduceInstr(cmd, env, instr))
+
+    case bool: BooleanExpr => (env, reduceBool(cmd, env, bool))
 
     case mod: Expr.Module =>
       val env = loadFile(cmd.copy(source = mod.sourcePath.content)).map:

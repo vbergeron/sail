@@ -18,7 +18,28 @@ def part[$: P]: P[Part] =
   capture | content
 
 def expr[$: P]: P[Expr] =
-  scope | container | module | funcDef | instr | template | str | num | funcCall | sym
+  scope | container | module | funcDef | instr | template | str | num | boolean | funcCall | sym
+
+def boolean[$: P]: P[BooleanExpr] =
+  def t[$: P]: P[BooleanExpr.True.type] =
+    P("true").map(_ => BooleanExpr.True)
+
+  def f[$: P]: P[BooleanExpr.False.type] =
+    P("false").map(_ => BooleanExpr.False)
+
+  def and[$: P]: P[BooleanExpr.And] =
+    P(expr ~ ws ~ "and" ~ ws ~ expr).map(BooleanExpr.And.apply)
+
+  def or[$: P]: P[BooleanExpr.Or] =
+    P(expr ~ ws ~ "or" ~ ws ~ expr).map(BooleanExpr.Or.apply)
+
+  def not[$: P]: P[BooleanExpr.Not] =
+    P("not" ~ ws ~ expr).map(BooleanExpr.Not.apply)
+
+  def eq[$: P]: P[BooleanExpr.Eq] =
+    P(expr ~ ws ~ "==" ~ ws ~ expr).map(BooleanExpr.Eq.apply)
+
+  eq | and | or | not | t | f
 
 def instr[$: P]: P[Instr] =
   def run[$: P]: P[Instr.Run] =
