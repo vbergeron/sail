@@ -28,6 +28,8 @@ def showBoolean(expr: BooleanExpr): String =
   expr match
     case BooleanExpr.True      => "true"
     case BooleanExpr.False     => "false"
+    case BooleanExpr.Not(e)    => s"not(${show(e)})"
+    case BooleanExpr.Eq(l, r)  => s"${show(l)} == ${show(r)}"
     case BooleanExpr.And(l, r) => s"${show(l)} and ${show(r)}"
     case BooleanExpr.Or(l, r)  => s"${show(l)} or ${show(r)}"
 

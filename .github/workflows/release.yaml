@@ -1,0 +1,70 @@
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up JDK
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'adopt'
+          java-version: '11'
+
+      - name: Cache SBT dependencies
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.sbt
+            ~/.ivy2
+          key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', '**/project/build.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-sbt-
+
+      - name: Build Scala Native artifacts
+        run: sbt nativeLink
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Install Scalafmt
+        run: |
+          mv target/scala-3.3.1/sail-out target/scala-3.3.1/sail
+
+      - name: Upload Binary
+        id: upload-artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: sail
+          path: target/scala-3.3.1/sail
+
+      - name: Set release information
+        uses: actions/github-script@v4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          script: |
+            const artifactPath = '${{ steps.upload-artifacts.outputs.artifact_path }}';
+            const releaseId = '${{ steps.create_release.outputs.id }}';
+            const octokit = require('@octokit/rest')();
+            octokit.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: releaseId,
+              name: 'sail',
+              data: require('fs').readFileSync(artifactPath),
+            });
