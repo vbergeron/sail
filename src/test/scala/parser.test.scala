@@ -1,8 +1,8 @@
 package sail.parser
 
+import sail.model.*
 import fastparse.*
 import munit.*
-import sail.{Expr, Part}
 
 class ParserTest extends FunSuite:
 
@@ -101,4 +101,4 @@ class ParserTest extends FunSuite:
   passing("Scope", "let a: b c: d in body", scope(_))
   passing("Scope", "let a(x): b in body", scope(_))
 
-  passing("Containter", "container from 'scratch': run ''", container(_))
+  passing("Containter", "from 'scratch': run ''", container(_))

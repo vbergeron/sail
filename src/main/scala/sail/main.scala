@@ -2,6 +2,7 @@ package sail
 
 import com.monovore.decline.{CommandApp, Opts}
 import sail.parser.*
+import sail.model.*
 
 import scala.annotation.tailrec
 import scala.collection.mutable.ListBuffer
@@ -248,7 +249,7 @@ object Sail
 
         val source = Opts.argument[String]("source").withDefault("build.sail")
 
-        import cats.syntax.all.*
+        import cats.syntax.apply.*
         (showParsing, showReduction, showFileLoad, source)
           .mapN(Args.apply)
           .map(run)

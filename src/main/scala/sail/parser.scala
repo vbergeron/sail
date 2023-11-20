@@ -1,15 +1,12 @@
 package sail.parser
 
+import sail.model.*
 import fastparse.*
 import fastparse.NoWhitespace.*
 
 def symbol[$: P] = P(CharPred(_.isLetter).rep.!).filter(_.nonEmpty)
 
 def ws[$: P] = P(CharsWhile(_.isWhitespace).rep)
-
-enum Part:
-  case Capture(expr: Expr)
-  case Content(text: String)
 
 def part[$: P]: P[Part] =
   def capture[$: P]: P[Part.Capture] =
@@ -19,32 +16,6 @@ def part[$: P]: P[Part] =
     P(CharsWhile(c => c != '\'' && c != '{').!).map(Part.Content.apply)
 
   capture | content
-
-sealed trait Expr
-
-object Expr:
-
-  case object Unit                                          extends Expr
-  case class Template(parts: Seq[Part])                     extends Expr
-  case class Str(content: String)                           extends Expr
-  case class Num(value: BigDecimal)                         extends Expr
-  case class Sym(module: Option[String], value: String)     extends Expr
-  case class FuncDef(name: Sym, args: Seq[Sym], body: Expr) extends Expr
-  case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
-  case class Container(from: Str, build: Instr)             extends Expr
-  case class Scope(bindings: Seq[FuncDef], body: Expr)      extends Expr
-
-  case class Module(name: Expr.Sym, sourcePath: Expr.Str) extends Expr
-
-sealed trait Instr extends Expr
-
-object Instr:
-  case class Run(value: Expr)            extends Instr
-  case class Expose(value: Expr)         extends Instr
-  case class Copy(src: Expr, dest: Expr) extends Instr
-  case class Call(value: Expr.FuncCall)  extends Instr
-  case class Block(values: Seq[Instr])   extends Instr
-  case class Defer(value: Instr)         extends Instr
 
 def expr[$: P]: P[Expr] =
   scope | container | module | funcDef | instr | template | str | num | funcCall | sym
@@ -121,7 +92,7 @@ def funcCall[$: P]: P[Expr.FuncCall] =
 
 def container[$: P]: P[Expr.Container] =
   P(
-    "container" ~ ws ~ "from" ~ ws ~ str ~ ws ~ ":" ~ ws ~ instr
+    "from" ~ ws ~ str ~ ws ~ ":" ~ ws ~ instr
   )
     .map(Expr.Container.apply)
 
