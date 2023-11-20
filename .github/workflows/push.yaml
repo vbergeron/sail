@@ -1,0 +1,44 @@
+name: Scala CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Set up JDK
+      uses: actions/setup-java@v2
+      with:
+        distribution: 'adopt'
+        java-version: '11'
+
+    - name: Cache SBT dependencies
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.sbt
+          ~/.ivy2
+        key: ${{ runner.os }}-sbt-${{ hashFiles('**/*.sbt', '**/project/build.properties') }}
+        restore-keys: |
+          ${{ runner.os }}-sbt-
+
+    - name: Install Scalafmt
+      run: |
+        curl -Ls https://get.scalafmt.org | bash -s -- --version 2.7.5
+
+    - name: Check code formatting with Scalafmt
+      run: sbt scalafmtCheck
+
+    - name: Build and test with SBT
+      run: sbt test
+
