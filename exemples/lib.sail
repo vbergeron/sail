@@ -1,4 +1,4 @@
-foo(name, value) =
+foo(name, value) :=
   let
      from = '$HOME/{ name }'
      to   = '/some/backup/{ from }'

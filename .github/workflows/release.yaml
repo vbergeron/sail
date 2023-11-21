@@ -41,30 +41,12 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Install Scalafmt
-        run: |
-          mv target/scala-3.3.1/sail-out target/scala-3.3.1/sail
-
-      - name: Upload Binary
-        id: upload-artifacts
-        uses: actions/upload-artifact@v2
-        with:
-          name: sail
-          path: target/scala-3.3.1/sail
-
-      - name: Set release information
-        uses: actions/github-script@v4
+      - name: Upload artifacts
+        id: upload_artifacts
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          script: |
-            const artifactPath = '${{ steps.upload-artifacts.outputs.artifact_path }}';
-            const releaseId = '${{ steps.create_release.outputs.id }}';
-            const octokit = require('@octokit/rest')();
-            octokit.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: releaseId,
-              name: 'sail',
-              data: require('fs').readFileSync(artifactPath),
-            });
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./target/scala-3.3.1/sail-out
+          asset_name: sail
