@@ -50,3 +50,4 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./target/scala-3.3.1/sail-out
           asset_name: sail
+          asset_content_type: application/octet-stream
