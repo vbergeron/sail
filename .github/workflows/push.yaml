@@ -40,5 +40,5 @@ jobs:
       run: sbt scalafmtCheck
 
     - name: Build and test with SBT
-      run: sbt test
+      run: sbt sailJVM/test
 

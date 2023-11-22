@@ -260,7 +260,7 @@ final case class Args(
     source: String
 )
 
-object Sail
+class Sail
     extends CommandApp(
       name = "sail",
       header = "A Functional, Declarative Dockerfile generator",
@@ -288,3 +288,5 @@ object Sail
           .map(run)
       }
     )
+
+object SailJVM extends Sail
