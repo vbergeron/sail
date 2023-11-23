@@ -107,5 +107,29 @@ class ParserTest extends FunSuite:
   passing("Boolean", "false", boolean(_))
   passing("Boolean", "bar or bar", boolean(_))
   passing("Boolean", "f(x) and g(y)", boolean(_))
+  // passingT("Boolean", "foo == bar and foo == baz", boolean.and(_)): expr =>
+  //  import BooleanExpr.*
+  //  import Expr.*
+  //  assertEquals(
+  //    expr,
+  //    And(
+  //      Eq(Sym(None, "foo"), Sym(None, "bar")),
+  //      Eq(Sym(None, "foo"), Sym(None, "bar"))
+  //    )
+  //  )
+
   passing("Boolean", "f(x) == g(y)", boolean(_))
   passing("Boolean", "not f(x)", boolean(_))
+
+  passing("Switch", "when foo then bar", cond.apply)
+  passing("Switch", "when foo then bar when foobar then barbar", cond.apply)
+
+  passing("Switch", "when foo then bar else baz", cond.apply)
+  passing(
+    "Switch",
+    """when foo then bar
+      |when foo == bar then barbar
+      |else baz
+      |""".stripMargin,
+    cond.apply
+  )

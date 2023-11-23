@@ -18,7 +18,7 @@ def part[$: P]: P[Part] =
   capture | content
 
 def expr[$: P]: P[Expr] =
-  scope | container | module | funcDef | instr | template | str | num | funcCall | sym | boolean.apply
+  cond.apply | scope | container | module | funcDef | instr | template | str | num | funcCall | sym | boolean.apply
 
 object boolean:
   def t[$: P]: P[BooleanExpr.True.type] =
@@ -28,22 +28,25 @@ object boolean:
     P("false").map(_ => BooleanExpr.False)
 
   def and[$: P]: P[BooleanExpr.And] =
-    P(expr ~ ws ~ "and" ~/ ws ~ expr)
+    val inner = eq | expr
+    P(inner ~ ws ~ "and" ~ ws ~ inner)
       .map(BooleanExpr.And.apply)
 
   def or[$: P]: P[BooleanExpr.Or] =
-    P(expr ~ ws ~ "or" ~/ ws ~ expr)
+    val inner = expr
+    P(inner ~ ws ~ "or" ~ ws ~ inner)
       .map(BooleanExpr.Or.apply)
 
   def not[$: P]: P[BooleanExpr.Not] =
     P("not" ~ ws ~ expr).map(BooleanExpr.Not.apply)
 
   def eq[$: P]: P[BooleanExpr.Eq] =
-    P(expr ~ ws ~ "==" ~/ ws ~ expr)
+    val inner = expr
+    P(inner ~ ws ~ "==" ~ ws ~ inner)
       .map(BooleanExpr.Eq.apply)
 
   def apply[$: P]: P[BooleanExpr] =
-    eq | and | or | not | t | f
+    and | or | eq | not | t | f
 
 def instr[$: P]: P[Instr] =
   def run[$: P]: P[Instr.Run] =
@@ -68,6 +71,20 @@ def instr[$: P]: P[Instr] =
     block | defer | run | expose | copy | call
 
   rec
+
+object cond:
+  def clause[$: P]: P[(Expr, Expr)] =
+    P("when" ~ ws ~ expr ~ ws ~ "then" ~ ws ~ expr)
+
+  def default[$: P]: P[Expr] =
+    P("else" ~ ws ~ expr)
+
+  def apply[$: P]: P[Expr.Switch] =
+    P(clause.rep ~ ws ~ default.?)
+      .filter: (clauses, _) =>
+        clauses.size > 0
+      .map: (clauses, default) =>
+        Expr.Switch(clauses, default)
 
 def scope[$: P]: P[Expr.Scope] =
   P("let" ~ ws ~ (funcDef ~ ws).rep ~ "in" ~ ws ~ expr).map(Expr.Scope.apply)

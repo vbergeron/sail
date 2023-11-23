@@ -53,6 +53,7 @@ def show(expr: Expr): String =
       s"<container from ${show(from)} - ${showInstr(build)}>"
     case Expr.Module(name, source)       =>
       s"<module ${show(name)} - ${show(source)}"
+    case Expr.Switch(_, _)               => "<switch TODO>"
 
 def render(expr: Expr): String =
   expr match
@@ -194,6 +195,21 @@ def reduce(cmd: Args, env: Env, expr: Expr): (Env, Expr) =
       val env = loadFile(cmd.copy(source = mod.sourcePath.content)).map:
         (sym, expr) => sym.copy(module = Some(mod.name.value)) -> expr
       (env, Expr.Unit)
+
+    case switch: Expr.Switch =>
+      import BooleanExpr.*
+      val branch = switch.clauses.find: (cond, _) =>
+        val reduced = reduce(cmd, env, cond)._2 match
+          case x: (True.type | False.type) =>
+            x
+          case e                           =>
+            throw Exception(
+              s"Expression did not reduce to boolean: $cond (reduced: $e)"
+            )
+        reduced == True
+      (branch.map(_._2) orElse switch.default)
+        .fold(throw Exception(s"Non exhaustive switch: $switch")): expr =>
+          reduce(cmd, env, expr)
 
 def reduceFile(cmd: Args, exprs: Seq[Expr]): Env =
   exprs.foldLeft(Map.empty[Expr.Sym, Expr])(reduce(cmd, _, _)._1)

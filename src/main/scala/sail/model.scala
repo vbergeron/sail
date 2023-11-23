@@ -13,6 +13,8 @@ object Expr:
   case class FuncCall(name: Sym, args: Seq[Expr])           extends Expr
   case class Container(from: Str, build: Instr)             extends Expr
   case class Scope(bindings: Seq[FuncDef], body: Expr)      extends Expr
+  case class Switch(clauses: Seq[(Expr, Expr)], default: Option[Expr])
+      extends Expr
 
   case class Module(name: Expr.Sym, sourcePath: Expr.Str) extends Expr
 
