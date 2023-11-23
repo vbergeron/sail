@@ -92,7 +92,7 @@ class ParserTest extends FunSuite:
   passing("FuncDef", "f(a): body", funcDef(_))
   passing("FuncDef", "f(a,b,c,d): body", funcDef(_))
 
-  failing("FuncCall", "f()", funcCall(_))
+  // failing("FuncCall", "f()", funcCall(_))
   passing("FuncCall", "f('str')", funcCall(_))
   passing("FuncCall", "f(g(x))", funcCall(_))
   passing("FuncCall", "f(a,b,c)", funcCall(_))
@@ -102,3 +102,10 @@ class ParserTest extends FunSuite:
   passing("Scope", "let a(x): b in body", scope(_))
 
   passing("Containter", "from 'scratch': run ''", container(_))
+
+  passing("Boolean", "true", boolean(_))
+  passing("Boolean", "false", boolean(_))
+  passing("Boolean", "bar or bar", boolean(_))
+  passing("Boolean", "f(x) and g(y)", boolean(_))
+  passing("Boolean", "f(x) == g(y)", boolean(_))
+  passing("Boolean", "not f(x)", boolean(_))

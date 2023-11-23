@@ -1,13 +1,11 @@
-lazy val sharedSettings = Seq(
-  name         := "sail",
-  scalaVersion := "3.3.1"
-)
+ThisBuild / scalaVersion := "3.3.1"
 
 val sail = crossProject(JVMPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("."))
-  .settings(sharedSettings)
   .settings(
+    name         := "sail",
+    scalaVersion := "3.3.1",
     libraryDependencies ++= Seq(
       "org.scalameta" %%% "munit"     % "1.0.0-M8" % Test,
       "com.lihaoyi"   %%% "fastparse" % "3.0.2",
@@ -19,6 +17,6 @@ val sail = crossProject(JVMPlatform, NativePlatform)
     nativeConfig ~= { nc =>
       nc.withLTO(LTO.thin)
         .withGC(GC.none)
-        .withMode(Mode.releaseFull)
+        .withMode(Mode.releaseFast)
     }
   }
