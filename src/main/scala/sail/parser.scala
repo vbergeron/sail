@@ -18,35 +18,43 @@ def part[$: P]: P[Part] =
   capture | content
 
 def expr[$: P]: P[Expr] =
-  cond.apply | scope | container | module | funcDef | instr | template | str | num | funcCall | sym | boolean.apply
+  boolean.apply | noInfix
+
+def noInfix[$: P]: P[Expr] =
+  cond.apply | scope | container | module | funcDef | instr | template | str | num | funcCall | t | f | sym
+
+def t[$: P]: P[BooleanExpr.True.type] =
+  P("true").map(_ => BooleanExpr.True)
+
+def f[$: P]: P[BooleanExpr.False.type] =
+  P("false").map(_ => BooleanExpr.False)
 
 object boolean:
-  def t[$: P]: P[BooleanExpr.True.type] =
-    P("true").map(_ => BooleanExpr.True)
+  import BooleanExpr.*
 
-  def f[$: P]: P[BooleanExpr.False.type] =
-    P("false").map(_ => BooleanExpr.False)
+  def and[$: P]: P[Expr] =
+    P(or ~ (ws ~ "and" ~ ws ~/ or).rep)
+      .map: (head, tail) =>
+        tail.foldLeft(head)(And.apply)
 
-  def and[$: P]: P[BooleanExpr.And] =
-    val inner = eq | expr
-    P(inner ~ ws ~ "and" ~ ws ~ inner)
-      .map(BooleanExpr.And.apply)
+  def or[$: P]: P[Expr] =
+    P(eq ~ ws ~ ("or" ~ ws ~/ eq).rep)
+      .map: (head, tail) =>
+        tail.foldLeft(head)(Or.apply)
 
-  def or[$: P]: P[BooleanExpr.Or] =
-    val inner = expr
-    P(inner ~ ws ~ "or" ~ ws ~ inner)
-      .map(BooleanExpr.Or.apply)
+  def eq[$: P]: P[Expr] =
+    P(value ~ ws ~ ("==" ~ ws ~/ value).rep)
+      .map: (head, tail) =>
+        tail.foldLeft(head)(Eq.apply)
 
   def not[$: P]: P[BooleanExpr.Not] =
-    P("not" ~ ws ~ expr).map(BooleanExpr.Not.apply)
+    P("not" ~ ws ~/ value).map(BooleanExpr.Not.apply)
 
-  def eq[$: P]: P[BooleanExpr.Eq] =
-    val inner = expr
-    P(inner ~ ws ~ "==" ~ ws ~ inner)
-      .map(BooleanExpr.Eq.apply)
+  def value[$: P]: P[Expr] =
+    not | noInfix
 
-  def apply[$: P]: P[BooleanExpr] =
-    and | or | eq | not | t | f
+  def apply[$: P]: P[Expr] =
+    and
 
 def instr[$: P]: P[Instr] =
   def run[$: P]: P[Instr.Run] =
